@@ -19,8 +19,10 @@ export async function activate(
 ): Promise<void> {
   const setContext = (key: string, value: unknown) =>
     vscode.commands.executeCommand('setContext', key, value);
-  await setContext('neon.ready', false);
-  let restoring = true;
+  let phase: 'restoring' | 'signedOut' | 'signedIn' = 'restoring';
+  const setPhase = (next: typeof phase) =>
+    setContext('neon.phase', (phase = next));
+  await setPhase('restoring');
   let finishRestoring!: () => void;
   const restored = new Promise<void>((resolve) => (finishRestoring = resolve));
   const sessions = new SessionManager(
@@ -54,28 +56,29 @@ export async function activate(
   });
   const status = new WorkspaceProjectStatus(workspace, signedIn);
 
-  let pendingReveal: string | undefined;
-  let revealedOrg: string | undefined;
+  let reveal: { projectId: string; orgShown: boolean } | undefined;
   const revealLinked = () => {
-    if (!pendingReveal || !view.visible) return;
-    const project = tree.projectNode(pendingReveal);
-    const org = project ? undefined : tree.orgNode(workspace.project?.orgId);
-    const node = project ?? org;
-    if (!node || (org && revealedOrg === pendingReveal)) return;
-    if (org) revealedOrg = pendingReveal;
-    else pendingReveal = revealedOrg = undefined;
+    if (!reveal || !view.visible) return;
+    const project = tree.projectNode(reveal.projectId);
+    const node =
+      project ??
+      (reveal.orgShown ? undefined : tree.orgNode(workspace.project?.orgId));
+    if (!node) return;
+    reveal = project ? undefined : { ...reveal, orgShown: true };
     void Promise.resolve(
       view.reveal(node, { expand: true, select: false, focus: false }),
     ).catch(() => undefined);
   };
   let linkedId = workspace.project?.projectId;
+  const linked = (projectId: string | undefined) => {
+    linkedId = projectId;
+    reveal = projectId ? { projectId, orgShown: false } : undefined;
+  };
   const onLinkChanged = async () => {
     const projectId = workspace.project?.projectId;
     await setContext('neon.workspaceProjectLinked', !!projectId);
     if (projectId === linkedId) return;
-    linkedId = projectId;
-    pendingReveal = projectId;
-    revealedOrg = undefined;
+    linked(projectId);
     tree.refresh();
   };
   let accountId: string | undefined;
@@ -94,12 +97,12 @@ export async function activate(
     status.update();
     const changed = account?.id !== accountId;
     accountId = account?.id;
-    await setContext('neon.signedIn', !!account);
+    if (phase !== 'restoring')
+      await setPhase(account ? 'signedIn' : 'signedOut');
     if (changed) {
-      linkedId = pendingReveal = workspace.project?.projectId;
-      revealedOrg = undefined;
+      linked(workspace.project?.projectId);
       void setContext('neon.workspaceProjectLinked', !!linkedId);
-      if (!restoring) tree.refresh();
+      if (phase !== 'restoring') tree.refresh();
       void workspace.detect();
     }
   };
@@ -144,7 +147,7 @@ export async function activate(
   };
 
   command('neon.signIn', async () => {
-    if (restoring) return;
+    if (phase === 'restoring') return;
     await vscode.authentication.getSession('neon', [...AUTH_SCOPES], {
       createIfNone: true,
     });
@@ -165,7 +168,6 @@ export async function activate(
   }
   await onAccountChanged();
   await onLinkChanged();
-  restoring = false;
-  await setContext('neon.ready', true);
+  await setPhase(sessions.account ? 'signedIn' : 'signedOut');
   if (sessions.account) void sessions.refreshProfile().catch(() => undefined);
 }

@@ -394,7 +394,7 @@ export function projectCommands(
     'neon.unlinkWorkspaceProject': () => workspace.unlink(),
 
     'neon.startCompute': (node: EndpointNode) =>
-      tree.transition(node, 'start', () =>
+      tree.transition(node, 'starting', () =>
         vscode.window.withProgress(
           { location: { viewId: 'neon.projects' } },
           () =>
@@ -406,7 +406,7 @@ export function projectCommands(
       ),
 
     'neon.suspendCompute': (node: EndpointNode) =>
-      tree.transition(node, 'suspend', () =>
+      tree.transition(node, 'suspending', () =>
         vscode.window.withProgress(
           { location: { viewId: 'neon.projects' } },
           () =>

@@ -67,7 +67,7 @@ export class ProjectsTree
   private readonly projects = new Map<string, ProjectNode>();
   private readonly parents = new Map<string, OrgNode | undefined>();
   private readonly orgs = new Map<string, OrgNode>();
-  private readonly transitions = new Map<string, 'start' | 'suspend'>();
+  private readonly transitions = new Map<string, ComputeStatus>();
 
   constructor(
     private readonly neon: Neon,
@@ -94,7 +94,7 @@ export class ProjectsTree
 
   async transition(
     node: EndpointNode,
-    to: 'start' | 'suspend',
+    to: 'starting' | 'suspending',
     run: () => PromiseLike<unknown>,
   ): Promise<void> {
     const id = node.endpoint.id;
@@ -316,7 +316,7 @@ export class ProjectsTree
         item.contextValue = branch.default ? 'branch.default' : 'branch';
         item.tooltip = tooltip(branch.name, [
           ['ID', branch.id],
-          ['Compute', compute ? computeState(compute) : 'None'],
+          ['Compute', compute ? COMPUTE_LABEL[computeStatus(compute)] : 'None'],
           ['Data size', bytes(branch.logical_size)],
           ['Created', date(branch.created_at)],
           ['Created by', branch.created_by?.name],
@@ -326,30 +326,20 @@ export class ProjectsTree
       }
       case 'endpoint': {
         const { endpoint } = node;
-        const transition = this.transitions.get(endpoint.id);
-        const busy =
-          !!transition ||
-          !!endpoint.pending_state ||
-          endpoint.current_state === 'init';
-        const active = !busy && endpoint.current_state === 'active';
+        const status =
+          this.transitions.get(endpoint.id) ?? computeStatus(endpoint);
         item.iconPath = new vscode.ThemeIcon(
-          busy ? 'loading~spin' : active ? 'vm-running' : 'vm-outline',
-          active ? new vscode.ThemeColor('charts.green') : undefined,
+          COMPUTE_ICON[status],
+          status === 'active'
+            ? new vscode.ThemeColor('charts.green')
+            : undefined,
         );
-        const state =
-          transition === 'start'
-            ? 'Starting'
-            : transition === 'suspend'
-              ? 'Suspending'
-              : computeState(endpoint);
-        item.description = `${state} · ${endpoint.autoscaling_limit_min_cu}–${endpoint.autoscaling_limit_max_cu} CU`;
-        item.contextValue = busy
-          ? 'endpoint.busy'
-          : `endpoint.${endpoint.current_state}`;
+        item.description = `${COMPUTE_LABEL[status]} · ${endpoint.autoscaling_limit_min_cu}–${endpoint.autoscaling_limit_max_cu} CU`;
+        item.contextValue = `endpoint.${status}`;
         item.tooltip = tooltip(label(node), [
           ['ID', endpoint.id],
           ['Host', endpoint.host],
-          ['State', computeState(endpoint)],
+          ['State', COMPUTE_LABEL[status]],
           [
             'Autoscaling',
             `${endpoint.autoscaling_limit_min_cu}–${endpoint.autoscaling_limit_max_cu} CU`,
@@ -464,11 +454,27 @@ function primaryFirst(endpoint: Endpoint): number {
   return endpoint.type === 'read_write' ? 0 : 1;
 }
 
-function computeState(endpoint: Endpoint): string {
-  if (endpoint.pending_state === 'idle') return 'Suspending';
+type ComputeStatus = 'starting' | 'suspending' | 'active' | 'idle';
+
+const COMPUTE_LABEL: Record<ComputeStatus, string> = {
+  starting: 'Starting',
+  suspending: 'Suspending',
+  active: 'Active',
+  idle: 'Suspended',
+};
+
+const COMPUTE_ICON: Record<ComputeStatus, string> = {
+  starting: 'loading~spin',
+  suspending: 'loading~spin',
+  active: 'vm-running',
+  idle: 'vm-outline',
+};
+
+function computeStatus(endpoint: Endpoint): ComputeStatus {
+  if (endpoint.pending_state === 'idle') return 'suspending';
   if (endpoint.pending_state || endpoint.current_state === 'init')
-    return 'Starting';
-  return endpoint.current_state === 'idle' ? 'Suspended' : 'Active';
+    return 'starting';
+  return endpoint.current_state === 'idle' ? 'idle' : 'active';
 }
 
 export function region(regionId: string): string {

@@ -162,34 +162,34 @@
       {
         "view": "neon.projects",
         "contents": "Loading your Neon account…",
-        "when": "!neon.ready || neon.signedIn"
+        "when": "neon.phase != signedOut"
       },
       {
         "view": "neon.projects",
         "contents": "Sign in to browse your Neon projects, branches, and databases.\n[Sign in to Neon](command:neon.signIn)",
-        "when": "neon.ready && !neon.signedIn"
+        "when": "neon.phase == signedOut"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "neon.signIn",
-          "when": "view == neon.projects && neon.ready && !neon.signedIn",
+          "when": "view == neon.projects && neon.phase == signedOut",
           "group": "navigation@1"
         },
         {
           "command": "neon.createProject",
-          "when": "view == neon.projects && neon.signedIn",
+          "when": "view == neon.projects && neon.phase == signedIn",
           "group": "navigation@1"
         },
         {
           "command": "neon.refresh",
-          "when": "view == neon.projects && neon.signedIn",
+          "when": "view == neon.projects && neon.phase == signedIn",
           "group": "navigation@2"
         },
         {
           "command": "neon.signOut",
-          "when": "view == neon.projects && neon.signedIn",
+          "when": "view == neon.projects && neon.phase == signedIn",
           "group": "account@1"
         }
       ],
@@ -338,39 +338,39 @@
       "commandPalette": [
         {
           "command": "neon.signIn",
-          "when": "neon.ready && !neon.signedIn"
+          "when": "neon.phase == signedOut"
         },
         {
           "command": "neon.signOut",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.refresh",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.createProject",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.createBranch",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.copyConnectionString",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.openInConsole",
-          "when": "neon.signedIn"
+          "when": "neon.phase == signedIn"
         },
         {
           "command": "neon.selectWorkspaceProject",
-          "when": "neon.signedIn && workspaceFolderCount > 0"
+          "when": "neon.phase == signedIn && workspaceFolderCount > 0"
         },
         {
           "command": "neon.unlinkWorkspaceProject",
-          "when": "neon.signedIn && neon.workspaceProjectLinked"
+          "when": "neon.phase == signedIn && neon.workspaceProjectLinked"
         },
         {
           "command": "neon.setWorkspaceProject",
