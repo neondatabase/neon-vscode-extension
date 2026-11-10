@@ -99,10 +99,11 @@ export class WorkspaceProject implements vscode.Disposable {
     await this.save({ ...state, project: { ...state.project, name } });
   }
 
-  async deleted(projectId: string): Promise<void> {
-    if (this.state?.project?.projectId !== projectId) return;
+  async deleted(projectId: string): Promise<boolean> {
+    if (this.state?.project?.projectId !== projectId) return false;
     await this.save(undefined);
     await this.detect();
+    return true;
   }
 
   async detect(): Promise<void> {

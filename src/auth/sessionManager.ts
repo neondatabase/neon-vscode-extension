@@ -66,7 +66,7 @@ export class SessionManager {
   private refreshFlight?: { revision: number; token: Promise<string> };
   private signInFlight?: Promise<AccountSession>;
   private signInAbort?: AbortController;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(expired: boolean) => void>();
 
   constructor(
     private readonly secrets: SecretStore,
@@ -82,13 +82,13 @@ export class SessionManager {
       : undefined;
   }
 
-  subscribe(listener: () => void): { dispose(): void } {
+  subscribe(listener: (expired: boolean) => void): { dispose(): void } {
     this.listeners.add(listener);
     return { dispose: () => this.listeners.delete(listener) };
   }
 
-  private changed(): void {
-    for (const listener of this.listeners) listener();
+  private changed(expired = false): void {
+    for (const listener of this.listeners) listener(expired);
   }
 
   private serialize(operation: () => Promise<void>): Promise<void> {
@@ -245,7 +245,7 @@ export class SessionManager {
         await this.secrets.delete(SESSION_KEY);
       } finally {
         this.session = undefined;
-        this.changed();
+        this.changed(!revoke && !!previous);
       }
     });
     if (revoke && previous?.tokens.refreshToken) {

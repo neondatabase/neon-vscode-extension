@@ -24,6 +24,10 @@ function unwrap(error: unknown): unknown {
     : error;
 }
 
+export function isSessionExpired(error: unknown): boolean {
+  return unwrap(error) instanceof SessionExpiredError;
+}
+
 export function isCancellation(error: unknown): boolean {
   error = unwrap(error);
   return (

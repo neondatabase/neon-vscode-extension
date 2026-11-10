@@ -66,6 +66,8 @@ export class ProjectsTree
   readonly onDidLoadProjects = this.loaded.event;
   private readonly projects = new Map<string, ProjectNode>();
   private readonly parents = new Map<string, OrgNode | undefined>();
+  private readonly orgs = new Map<string, OrgNode>();
+  private readonly transitions = new Map<string, 'start' | 'suspend'>();
 
   constructor(
     private readonly neon: Neon,
@@ -84,6 +86,27 @@ export class ProjectsTree
 
   projectNode(projectId: string): ProjectNode | undefined {
     return this.projects.get(projectId);
+  }
+
+  orgNode(orgId: string | undefined): OrgNode | undefined {
+    return orgId ? this.orgs.get(orgId) : undefined;
+  }
+
+  async transition(
+    node: EndpointNode,
+    to: 'start' | 'suspend',
+    run: () => PromiseLike<unknown>,
+  ): Promise<void> {
+    const id = node.endpoint.id;
+    if (this.transitions.has(id)) return;
+    this.transitions.set(id, to);
+    this.refresh(node);
+    try {
+      await run();
+    } finally {
+      this.transitions.delete(id);
+      this.refreshProject(node.project.id);
+    }
   }
 
   getParent(node: Node): Node | undefined {
@@ -121,11 +144,15 @@ export class ProjectsTree
   private async load(node?: Node): Promise<Node[]> {
     if (!node) {
       const orgs = await this.neon.user.organizations();
-      if (orgs.length > 1)
-        return byName(orgs, (org) => org.name).map((org) => ({
-          kind: 'org',
-          org,
-        }));
+      this.orgs.clear();
+      if (orgs.length > 1) {
+        queueMicrotask(() => this.loaded.fire());
+        return byName(orgs, (org) => org.name).map((org) => {
+          const node: OrgNode = { kind: 'org', org };
+          this.orgs.set(org.id, node);
+          return node;
+        });
+      }
       const projects = orgs[0]
         ? await this.loadProjects(orgs[0], undefined)
         : [];
@@ -207,7 +234,11 @@ export class ProjectsTree
     const nodes = byName(projects, (p) => p.name)
       .sort((a, b) => Number(b.id === linked) - Number(a.id === linked))
       .map((project) => {
-        const node: ProjectNode = { kind: 'project', project };
+        const node: ProjectNode = this.projects.get(project.id) ?? {
+          kind: 'project',
+          project,
+        };
+        node.project = project;
         this.projects.set(project.id, node);
         this.parents.set(project.id, parent);
         return node;
@@ -295,19 +326,26 @@ export class ProjectsTree
       }
       case 'endpoint': {
         const { endpoint } = node;
-        const state = endpoint.pending_state ?? endpoint.current_state;
+        const transition = this.transitions.get(endpoint.id);
+        const busy =
+          !!transition ||
+          !!endpoint.pending_state ||
+          endpoint.current_state === 'init';
+        const active = !busy && endpoint.current_state === 'active';
         item.iconPath = new vscode.ThemeIcon(
-          endpoint.pending_state || state === 'init'
-            ? 'loading~spin'
-            : state === 'active'
-              ? 'vm-running'
-              : 'vm-outline',
-          state === 'active'
-            ? new vscode.ThemeColor('charts.green')
-            : undefined,
+          busy ? 'loading~spin' : active ? 'vm-running' : 'vm-outline',
+          active ? new vscode.ThemeColor('charts.green') : undefined,
         );
-        item.description = `${computeState(endpoint)} · ${endpoint.autoscaling_limit_min_cu}–${endpoint.autoscaling_limit_max_cu} CU`;
-        item.contextValue = `endpoint.${endpoint.current_state}`;
+        const state =
+          transition === 'start'
+            ? 'Starting'
+            : transition === 'suspend'
+              ? 'Suspending'
+              : computeState(endpoint);
+        item.description = `${state} · ${endpoint.autoscaling_limit_min_cu}–${endpoint.autoscaling_limit_max_cu} CU`;
+        item.contextValue = busy
+          ? 'endpoint.busy'
+          : `endpoint.${endpoint.current_state}`;
         item.tooltip = tooltip(label(node), [
           ['ID', endpoint.id],
           ['Host', endpoint.host],
@@ -427,12 +465,10 @@ function primaryFirst(endpoint: Endpoint): number {
 }
 
 function computeState(endpoint: Endpoint): string {
-  const state = endpoint.pending_state ?? endpoint.current_state;
-  return state === 'idle'
-    ? 'Suspended'
-    : state === 'init'
-      ? 'Starting'
-      : 'Active';
+  if (endpoint.pending_state === 'idle') return 'Suspending';
+  if (endpoint.pending_state || endpoint.current_state === 'init')
+    return 'Starting';
+  return endpoint.current_state === 'idle' ? 'Suspended' : 'Active';
 }
 
 export function region(regionId: string): string {

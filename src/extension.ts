@@ -7,7 +7,12 @@ import { ProjectsTree } from './views/projectsTree';
 import { WorkspaceProjectStatus } from './views/statusBar';
 import { WorkspaceProject } from './workspace/workspaceProject';
 import { projectCommands } from './commands';
-import { isCancellation, userMessage } from './core/errors';
+import {
+  isCancellation,
+  isSessionExpired,
+  SessionExpiredError,
+  userMessage,
+} from './core/errors';
 
 export async function activate(
   context: vscode.ExtensionContext,
@@ -50,10 +55,15 @@ export async function activate(
   const status = new WorkspaceProjectStatus(workspace, signedIn);
 
   let pendingReveal: string | undefined;
+  let revealedOrg: string | undefined;
   const revealLinked = () => {
-    const node = pendingReveal && tree.projectNode(pendingReveal);
-    if (!node || !view.visible) return;
-    pendingReveal = undefined;
+    if (!pendingReveal || !view.visible) return;
+    const project = tree.projectNode(pendingReveal);
+    const org = project ? undefined : tree.orgNode(workspace.project?.orgId);
+    const node = project ?? org;
+    if (!node || (org && revealedOrg === pendingReveal)) return;
+    if (org) revealedOrg = pendingReveal;
+    else pendingReveal = revealedOrg = undefined;
     void Promise.resolve(
       view.reveal(node, { expand: true, select: false, focus: false }),
     ).catch(() => undefined);
@@ -65,9 +75,19 @@ export async function activate(
     if (projectId === linkedId) return;
     linkedId = projectId;
     pendingReveal = projectId;
+    revealedOrg = undefined;
     tree.refresh();
   };
   let accountId: string | undefined;
+  let expiryPrompt: PromiseLike<unknown> | undefined;
+  const promptExpired = () => {
+    expiryPrompt ??= vscode.window
+      .showWarningMessage(new SessionExpiredError().message, 'Sign In')
+      .then((action) => {
+        expiryPrompt = undefined;
+        if (action) return vscode.commands.executeCommand('neon.signIn');
+      });
+  };
   const onAccountChanged = async () => {
     const account = sessions.account;
     view.description = account?.profile.email || undefined;
@@ -77,8 +97,9 @@ export async function activate(
     await setContext('neon.signedIn', !!account);
     if (changed) {
       linkedId = pendingReveal = workspace.project?.projectId;
+      revealedOrg = undefined;
       void setContext('neon.workspaceProjectLinked', !!linkedId);
-      tree.refresh();
+      if (!restoring) tree.refresh();
       void workspace.detect();
     }
   };
@@ -92,7 +113,10 @@ export async function activate(
     workspace.onDidChange(() => void onLinkChanged()),
     view.onDidChangeVisibility(revealLinked),
     tree.onDidLoadProjects(revealLinked),
-    sessions.subscribe(() => void onAccountChanged()),
+    sessions.subscribe((expired) => {
+      if (expired) promptExpired();
+      void onAccountChanged();
+    }),
     vscode.authentication.registerAuthenticationProvider(
       'neon',
       'Neon',
@@ -110,7 +134,8 @@ export async function activate(
         try {
           return await action(...args);
         } catch (error) {
-          if (!isCancellation(error))
+          if (isSessionExpired(error)) promptExpired();
+          else if (!isCancellation(error))
             void vscode.window.showErrorMessage(userMessage(error));
           return undefined;
         }

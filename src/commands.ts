@@ -265,8 +265,7 @@ export function projectCommands(
         },
         () => neon.projects.delete({ projectId: project.id }),
       );
-      await workspace.deleted(project.id);
-      tree.refresh();
+      if (!(await workspace.deleted(project.id))) tree.refresh();
     },
 
     'neon.createBranch': async (node?: ProjectNode | BranchNode) => {
@@ -394,28 +393,28 @@ export function projectCommands(
 
     'neon.unlinkWorkspaceProject': () => workspace.unlink(),
 
-    'neon.startCompute': ({ project, endpoint }: EndpointNode) =>
-      vscode.window.withProgress(
-        { location: { viewId: 'neon.projects' } },
-        async () => {
-          await neon.postgres.endpoints.start(
-            { projectId: project.id, endpointId: endpoint.id },
-            { waitForReadiness: true },
-          );
-          tree.refreshProject(project.id);
-        },
+    'neon.startCompute': (node: EndpointNode) =>
+      tree.transition(node, 'start', () =>
+        vscode.window.withProgress(
+          { location: { viewId: 'neon.projects' } },
+          () =>
+            neon.postgres.endpoints.start(
+              { projectId: node.project.id, endpointId: node.endpoint.id },
+              { waitForReadiness: true },
+            ),
+        ),
       ),
 
-    'neon.suspendCompute': ({ project, endpoint }: EndpointNode) =>
-      vscode.window.withProgress(
-        { location: { viewId: 'neon.projects' } },
-        async () => {
-          await neon.postgres.endpoints.suspend(
-            { projectId: project.id, endpointId: endpoint.id },
-            { waitForReadiness: true },
-          );
-          tree.refreshProject(project.id);
-        },
+    'neon.suspendCompute': (node: EndpointNode) =>
+      tree.transition(node, 'suspend', () =>
+        vscode.window.withProgress(
+          { location: { viewId: 'neon.projects' } },
+          () =>
+            neon.postgres.endpoints.suspend(
+              { projectId: node.project.id, endpointId: node.endpoint.id },
+              { waitForReadiness: true },
+            ),
+        ),
       ),
 
     'neon.openInConsole': async (node?: ProjectNode | BranchNode) => {
