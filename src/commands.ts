@@ -187,7 +187,7 @@ export function projectCommands(
   };
 
   return {
-    'neon.refresh': (node?: Node) => tree.refresh(node),
+    'neon.refresh': (node?: Node) => tree.refresh(node, !node),
 
     'neon.createProject': async (node?: OrgNode) => {
       const org = node?.org ?? (await pickOrg());
@@ -324,7 +324,8 @@ export function projectCommands(
       tree.refreshProject(project.id);
     },
 
-    'neon.deleteBranch': async ({ project, branch }: BranchNode) => {
+    'neon.deleteBranch': async (node: BranchNode) => {
+      const { project, branch } = node;
       const confirmed = await vscode.window.showWarningMessage(
         `Delete branch “${branch.name}”?`,
         {
@@ -342,7 +343,7 @@ export function projectCommands(
         () =>
           neon.branches.delete({ projectId: project.id, branchId: branch.id }),
       );
-      tree.refreshProject(project.id);
+      tree.remove(node);
     },
 
     'neon.copyConnectionString': copyConnectionString,

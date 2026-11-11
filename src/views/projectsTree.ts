@@ -8,7 +8,7 @@ import type {
   Role,
 } from '@neon/sdk';
 import type { Neon } from '../api/neonApi';
-import { isCancellation, userMessage } from '../core/errors';
+import { isCancellation, isNotFound, userMessage } from '../core/errors';
 import type { ProjectLink } from '../workspace/workspaceProject';
 
 export type OrgNode = { kind: 'org'; org: Organization };
@@ -64,10 +64,13 @@ export class ProjectsTree
   readonly onDidChangeTreeData = this.events.event;
   private readonly loaded = new vscode.EventEmitter<void>();
   readonly onDidLoadProjects = this.loaded.event;
+  private readonly lost = new vscode.EventEmitter<string>();
+  readonly onDidLoseProject = this.lost.event;
   private readonly projects = new Map<string, ProjectNode>();
   private readonly parents = new Map<string, OrgNode | undefined>();
   private readonly orgs = new Map<string, OrgNode>();
   private readonly transitions = new Map<string, ComputeStatus>();
+  private readonly removed = new Set<string>();
 
   constructor(
     private readonly neon: Neon,
@@ -76,12 +79,25 @@ export class ProjectsTree
     private readonly restored: PromiseLike<void>,
   ) {}
 
-  refresh(node?: Node): void {
+  refresh(node?: Node, restoreRemoved = false): void {
+    if (restoreRemoved) this.removed.clear();
     this.events.fire(node);
   }
 
   refreshProject(projectId: string): void {
     this.refresh(this.projects.get(projectId));
+  }
+
+  remove(node: ProjectNode | BranchNode): void {
+    const projectId = node.project.id;
+    if (node.kind === 'branch') {
+      this.removed.add(node.branch.id);
+      this.refreshProject(projectId);
+    } else {
+      this.removed.add(projectId);
+      this.refresh(this.parents.get(projectId));
+      this.lost.fire(projectId);
+    }
   }
 
   projectNode(projectId: string): ProjectNode | undefined {
@@ -122,6 +138,13 @@ export class ProjectsTree
       return await this.load(node);
     } catch (error) {
       if (isCancellation(error) || !this.signedIn()) return [];
+      if (
+        (node?.kind === 'project' || node?.kind === 'branch') &&
+        isNotFound(error)
+      ) {
+        this.remove(node);
+        return [];
+      }
       return [
         {
           kind: 'message',
@@ -170,6 +193,7 @@ export class ProjectsTree
           this.neon.postgres.endpoints.list({ projectId }),
         ]);
         return branches
+          .filter((branch) => !this.removed.has(branch.id))
           .sort(
             (a, b) =>
               Number(b.default) - Number(a.default) ||
@@ -230,8 +254,12 @@ export class ProjectsTree
     parent: OrgNode | undefined,
   ): Promise<Node[]> {
     const projects = await this.neon.projects.list({ org_id: org.id }).all();
-    const linked = this.linked()?.projectId;
+    const link = this.linked();
+    const linked = link?.projectId;
+    if (link?.orgId === org.id && !projects.some((p) => p.id === linked))
+      queueMicrotask(() => this.lost.fire(link.projectId));
     const nodes = byName(projects, (p) => p.name)
+      .filter((project) => !this.removed.has(project.id))
       .sort((a, b) => Number(b.id === linked) - Number(a.id === linked))
       .map((project) => {
         const node: ProjectNode = this.projects.get(project.id) ?? {
@@ -378,6 +406,7 @@ export class ProjectsTree
   dispose(): void {
     this.events.dispose();
     this.loaded.dispose();
+    this.lost.dispose();
   }
 }
 

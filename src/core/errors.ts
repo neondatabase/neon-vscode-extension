@@ -18,6 +18,10 @@ export function isUnauthorized(error: unknown): boolean {
   return isNeonError(error) && error.kind === 'auth' && error.status === 401;
 }
 
+export function isNotFound(error: unknown): boolean {
+  return isNeonError(error) && error.kind === 'not_found';
+}
+
 function unwrap(error: unknown): unknown {
   return isNeonError(error) && error.cause instanceof NeonError
     ? error.cause

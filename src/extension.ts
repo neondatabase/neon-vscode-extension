@@ -9,6 +9,7 @@ import { WorkspaceProject } from './workspace/workspaceProject';
 import { projectCommands } from './commands';
 import {
   isCancellation,
+  isNotFound,
   isSessionExpired,
   SessionExpiredError,
   userMessage,
@@ -116,6 +117,7 @@ export async function activate(
     workspace.onDidChange(() => void onLinkChanged()),
     view.onDidChangeVisibility(revealLinked),
     tree.onDidLoadProjects(revealLinked),
+    tree.onDidLoseProject((projectId) => void workspace.deleted(projectId)),
     sessions.subscribe((expired) => {
       if (expired) promptExpired();
       void onAccountChanged();
@@ -138,8 +140,10 @@ export async function activate(
           return await action(...args);
         } catch (error) {
           if (isSessionExpired(error)) promptExpired();
-          else if (!isCancellation(error))
+          else if (!isCancellation(error)) {
+            if (isNotFound(error)) tree.refresh();
             void vscode.window.showErrorMessage(userMessage(error));
+          }
           return undefined;
         }
       }),
