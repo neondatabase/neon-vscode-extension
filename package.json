@@ -1,47 +1,143 @@
 {
   "name": "neon-vscode-extension",
-  "displayName": "Neon VSCode Extension",
-  "description": "VSCode extension for Neon",
-  "version": "1.0.0",
-  "publisher": "neon",
+  "displayName": "Neon VS Code Extension",
+  "description": "Browse and manage your Neon Postgres projects, branches, and databases from VS Code.",
+  "version": "0.1.0",
+  "publisher": "databricks",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neondatabase/neon-vscode-extension.git"
+  },
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.101.0",
+    "node": ">=22.15.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:neon-welcome",
-    "onCommand:neon-vscode-extension.signIn"
+  "extensionKind": [
+    "ui"
   ],
-  "main": "./out/extension.js",
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
+    "authentication": [
+      {
+        "id": "neon",
+        "label": "Neon"
+      }
+    ],
     "commands": [
       {
-        "command": "neon-vscode-extension.signIn",
-        "title": "Sign in to Neon"
+        "command": "neon.signIn",
+        "title": "Sign In",
+        "category": "Neon",
+        "icon": "$(sign-in)"
       },
       {
-        "command": "neon-vscode-extension.signOut",
-        "title": "Sign out from Neon"
+        "command": "neon.signOut",
+        "title": "Sign Out",
+        "category": "Neon",
+        "icon": "$(sign-out)"
       },
       {
-        "command": "neon-vscode-extension.refreshTree",
+        "command": "neon.refresh",
         "title": "Refresh",
+        "category": "Neon",
         "icon": "$(refresh)"
       },
       {
-        "command": "neon-vscode-extension.switchProject",
-        "title": "Switch Neon Project"
-      },
-      {
-        "command": "neon-vscode-extension.selectProject",
-        "title": "Select Project"
-      },
-      {
-        "command": "neon-vscode-extension.createBranch",
-        "title": "Create Branch",
+        "command": "neon.createProject",
+        "title": "Create Project…",
+        "category": "Neon",
         "icon": "$(add)"
+      },
+      {
+        "command": "neon.renameProject",
+        "title": "Rename Project…",
+        "category": "Neon"
+      },
+      {
+        "command": "neon.deleteProject",
+        "title": "Delete Project…",
+        "category": "Neon"
+      },
+      {
+        "command": "neon.createBranch",
+        "title": "Create Branch…",
+        "category": "Neon",
+        "icon": "$(git-branch-create)"
+      },
+      {
+        "command": "neon.renameBranch",
+        "title": "Rename Branch…",
+        "category": "Neon"
+      },
+      {
+        "command": "neon.setDefaultBranch",
+        "title": "Set as Default Branch",
+        "category": "Neon"
+      },
+      {
+        "command": "neon.deleteBranch",
+        "title": "Delete Branch…",
+        "category": "Neon"
+      },
+      {
+        "command": "neon.copyConnectionString",
+        "title": "Copy Connection String",
+        "category": "Neon",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "neon.startCompute",
+        "title": "Start Compute",
+        "category": "Neon",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "neon.suspendCompute",
+        "title": "Suspend Compute",
+        "category": "Neon",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "neon.openInConsole",
+        "title": "Open in Neon Console",
+        "category": "Neon",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "neon.selectWorkspaceProject",
+        "title": "Select Workspace Project…",
+        "category": "Neon",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "neon.setWorkspaceProject",
+        "title": "Set as Workspace Project",
+        "category": "Neon",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "neon.unlinkWorkspaceProject",
+        "title": "Unlink Workspace Project",
+        "category": "Neon",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "neon.copyId",
+        "title": "Copy ID",
+        "category": "Neon"
       }
     ],
     "viewsContainers": {
@@ -49,82 +145,315 @@
         {
           "id": "neon",
           "title": "Neon",
-          "icon": "media/neon-icon.svg"
+          "icon": "resources/neon.svg"
         }
       ]
     },
     "views": {
       "neon": [
         {
-          "id": "neonExplorer",
-          "name": "Neon"
+          "icon": "resources/neon.svg",
+          "id": "neon.projects",
+          "name": "Projects"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "neon.projects",
+        "contents": "Loading your Neon account…",
+        "when": "neon.phase != signedOut"
+      },
+      {
+        "view": "neon.projects",
+        "contents": "Sign in to browse your Neon projects, branches, and databases.\n[Sign in to Neon](command:neon.signIn)",
+        "when": "neon.phase == signedOut"
+      }
+    ],
     "menus": {
       "view/title": [
         {
-          "command": "neon-vscode-extension.refreshTree",
-          "when": "view == neonExplorer",
-          "group": "navigation"
+          "command": "neon.signIn",
+          "when": "view == neon.projects && neon.phase == signedOut",
+          "group": "navigation@1"
         },
         {
-          "command": "neon-vscode-extension.switchProject",
-          "when": "view == neonExplorer",
-          "group": "navigation"
+          "command": "neon.createProject",
+          "when": "view == neon.projects && neon.phase == signedIn",
+          "group": "navigation@1"
+        },
+        {
+          "command": "neon.refresh",
+          "when": "view == neon.projects && neon.phase == signedIn",
+          "group": "navigation@2"
+        },
+        {
+          "command": "neon.signOut",
+          "when": "view == neon.projects && neon.phase == signedIn",
+          "group": "account@1"
         }
       ],
       "view/item/context": [
         {
-          "command": "neon-vscode-extension.selectProject",
-          "when": "view == neonExplorer && viewItem == project",
-          "group": "inline"
+          "command": "neon.createProject",
+          "when": "view == neon.projects && viewItem == org",
+          "group": "inline@1"
         },
         {
-          "command": "neon-vscode-extension.createBranch",
-          "when": "view == neonExplorer && viewItem == current-project",
-          "group": "inline"
+          "command": "neon.createProject",
+          "when": "view == neon.projects && viewItem == org",
+          "group": "1_create@1"
+        },
+        {
+          "command": "neon.copyId",
+          "when": "view == neon.projects && viewItem == org",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "neon.createBranch",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "inline@1"
+        },
+        {
+          "command": "neon.openInConsole",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "inline@2"
+        },
+        {
+          "command": "neon.createBranch",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "1_create@1"
+        },
+        {
+          "command": "neon.openInConsole",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "2_open@1"
+        },
+        {
+          "command": "neon.setWorkspaceProject",
+          "when": "view == neon.projects && viewItem == project && workspaceFolderCount > 0",
+          "group": "2_open@2"
+        },
+        {
+          "command": "neon.unlinkWorkspaceProject",
+          "when": "view == neon.projects && viewItem == project.linked",
+          "group": "2_open@2"
+        },
+        {
+          "command": "neon.copyId",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "neon.renameProject",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "4_edit@1"
+        },
+        {
+          "command": "neon.deleteProject",
+          "when": "view == neon.projects && viewItem =~ /^project/",
+          "group": "9_delete@1"
+        },
+        {
+          "command": "neon.copyConnectionString",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "inline@1"
+        },
+        {
+          "command": "neon.createBranch",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "inline@2"
+        },
+        {
+          "command": "neon.copyConnectionString",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "neon.copyId",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "neon.createBranch",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "2_create@1"
+        },
+        {
+          "command": "neon.openInConsole",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "3_open@1"
+        },
+        {
+          "command": "neon.renameBranch",
+          "when": "view == neon.projects && viewItem =~ /^branch/",
+          "group": "4_edit@1"
+        },
+        {
+          "command": "neon.setDefaultBranch",
+          "when": "view == neon.projects && viewItem == branch",
+          "group": "4_edit@2"
+        },
+        {
+          "command": "neon.deleteBranch",
+          "when": "view == neon.projects && viewItem == branch",
+          "group": "9_delete@1"
+        },
+        {
+          "command": "neon.startCompute",
+          "when": "view == neon.projects && viewItem == endpoint.idle",
+          "group": "inline@1"
+        },
+        {
+          "command": "neon.suspendCompute",
+          "when": "view == neon.projects && viewItem == endpoint.active",
+          "group": "inline@1"
+        },
+        {
+          "command": "neon.startCompute",
+          "when": "view == neon.projects && viewItem == endpoint.idle",
+          "group": "1_state@1"
+        },
+        {
+          "command": "neon.suspendCompute",
+          "when": "view == neon.projects && viewItem == endpoint.active",
+          "group": "1_state@1"
+        },
+        {
+          "command": "neon.copyId",
+          "when": "view == neon.projects && viewItem =~ /^endpoint/",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "neon.copyConnectionString",
+          "when": "view == neon.projects && viewItem == database",
+          "group": "inline@1"
+        },
+        {
+          "command": "neon.copyConnectionString",
+          "when": "view == neon.projects && viewItem == database",
+          "group": "1_copy@1"
         }
       ],
       "commandPalette": [
         {
-          "command": "neon-vscode-extension.switchProject",
-          "when": "neon-vscode-extension.isAuthenticated"
+          "command": "neon.signIn",
+          "when": "neon.phase == signedOut"
         },
         {
-          "command": "neon-vscode-extension.selectProject",
+          "command": "neon.signOut",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.refresh",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.createProject",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.createBranch",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.copyConnectionString",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.openInConsole",
+          "when": "neon.phase == signedIn"
+        },
+        {
+          "command": "neon.selectWorkspaceProject",
+          "when": "neon.phase == signedIn && workspaceFolderCount > 0"
+        },
+        {
+          "command": "neon.unlinkWorkspaceProject",
+          "when": "neon.phase == signedIn && neon.workspaceProjectLinked"
+        },
+        {
+          "command": "neon.setWorkspaceProject",
           "when": "false"
         },
         {
-          "command": "neon-vscode-extension.createBranch",
-          "when": "neon-vscode-extension.isAuthenticated"
+          "command": "neon.renameProject",
+          "when": "false"
+        },
+        {
+          "command": "neon.deleteProject",
+          "when": "false"
+        },
+        {
+          "command": "neon.renameBranch",
+          "when": "false"
+        },
+        {
+          "command": "neon.setDefaultBranch",
+          "when": "false"
+        },
+        {
+          "command": "neon.deleteBranch",
+          "when": "false"
+        },
+        {
+          "command": "neon.startCompute",
+          "when": "false"
+        },
+        {
+          "command": "neon.suspendCompute",
+          "when": "false"
+        },
+        {
+          "command": "neon.copyId",
+          "when": "false"
         }
       ]
+    },
+    "configuration": {
+      "title": "Neon",
+      "properties": {
+        "neon.oauth.clientId": {
+          "type": "string",
+          "default": "neonctl",
+          "scope": "application",
+          "minLength": 1,
+          "description": "Registered public Neon OAuth client. Defaults to neonctl, which is allowed to request the project and organization scopes this extension needs. Sign out before changing this; custom registrations must support dynamic loopback ports."
+        },
+        "neon.connectionString.pooled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Copy pooled (PgBouncer) connection strings. Turn off for migrations and tools that need a direct connection."
+        },
+        "neon.workspaceProject.detectFromEnv": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Link the workspace to the Neon project that connection strings in its `.env` files point at. The files never leave your machine: the compute host is matched against the computes in your Neon projects. A project you select yourself always takes priority."
+        }
+      }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && node copy-assets.js",
-    "watch": "node watch.js",
-    "pretest": "npm run compile",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "package": "vsce package"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@types/node": "^20.4.5",
-    "@types/open": "^6.2.1",
-    "@types/vscode": "^1.60.0",
-    "@vscode/vsce": "^2.19.0",
-    "typescript": "^5.1.6",
-    "vscode": "^1.1.37"
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run format:check && npm run build",
+    "vscode:prepublish": "npm run typecheck && npm run build -- --production",
+    "package": "vsce package --no-dependencies"
   },
   "dependencies": {
-    "@neondatabase/api-client": "^1.13.0",
-    "open": "^9.1.0",
-    "openid-client": "^5.6.1"
+    "@neon/sdk": "7.0.1",
+    "openid-client": "^6.8.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.101.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.9.0"
   }
 }
