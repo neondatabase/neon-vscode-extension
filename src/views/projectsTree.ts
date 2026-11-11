@@ -96,7 +96,6 @@ export class ProjectsTree
     } else {
       this.removed.add(projectId);
       this.refresh(this.parents.get(projectId));
-      this.lost.fire(projectId);
     }
   }
 
